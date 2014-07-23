@@ -5,23 +5,16 @@ import android.hardware.Camera;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
-import android.media.MediaRecorder;
-import android.os.Environment;
-import android.os.Handler;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -45,9 +38,10 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private BufferedOutputStream fos;
 
     private byte[]  mBuffer;
-    private int N =1;
+    private int N = 0;
 
-
+    private static MediaFormat format;
+    private long startTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +49,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         setContentView(R.layout.activity_codec);
         this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         frame = (FrameLayout) this.findViewById(R.id.camera_preview);
+        startTime = System.currentTimeMillis();
 
         setUp();
         surfaceView = (SurfaceView) this.findViewById(R.id.camera_surface);
@@ -75,8 +70,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         try {
             mediaCodec.stop();
             mediaCodec.release();
-            fos.flush();
-            fos.close();
+            closeOutputFile();
             camera.stopPreview();
             camera.release();
         } catch (Exception e){
@@ -84,96 +78,118 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         }
     }
 
+    private void closeOutputFile() {
+        try {
+            fos.flush();
+            fos.close();
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-        public void setUp() {
-            File f = new File("/sdcard/success");
-            try {
-                fos = new BufferedOutputStream(new FileOutputStream(f));
-                Log.i("AvcEncoder", "outputStream initialized");
-            } catch (Exception e){
-                e.printStackTrace();
-            }
 
-            int encBitRate = 125000;
+    public void setUp() {
+        int encBitRate = 125000;
 
-            MediaFormat format = MediaFormat.createVideoFormat("video/avc", 320, 240);
+        format = MediaFormat.createVideoFormat("video/avc", 320, 240);
 
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-            format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 15);
-            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
-            //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, 15);
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
+        //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
 
-            mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
-            mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-            mediaCodec.start();
+        createOutputFile();
+        initMediaCodec();
+    }
 
+    private void initMediaCodec() {
+        mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
+        mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        mediaCodec.start();
+    }
+
+    private void createOutputFile() {
+        int fileNumber = N / 300;
+        File dir = new File("/sdcard/wearscript_video/" + startTime + "/");
+        dir.mkdir();
+        File f = new File("/sdcard/wearscript_video/" + startTime + "/" + fileNumber + ".h264");
+        try {
+            fos = new BufferedOutputStream(new FileOutputStream(f));
+            Log.i("AvcEncoder", "outputStream initialized");
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+
+    public synchronized void offerEncoder(byte[] input) {
+
+        N++;
+        if (N % 300 == 0) {
+            closeOutputFile();
+            createOutputFile();
+            initMediaCodec();
         }
 
+        ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
+        ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
 
-        public void offerEncoder(byte[] input) {
-
-            ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
-            ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
-
-            int inputBufferIndex = mediaCodec.dequeueInputBuffer(-1);
-            if (inputBufferIndex >= 0) {
-                ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-                Log.d("SIZE"," "+input.length);
-                inputBuffer.clear();
-                inputBuffer.put(input);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, 0,0);
-                N++;
-            }
-
-
-            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-            int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
-            Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
-            do
+        int inputBufferIndex = mediaCodec.dequeueInputBuffer(-1);
+        if (inputBufferIndex >= 0) {
+            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
+            Log.d("SIZE"," "+input.length);
+            inputBuffer.clear();
+            inputBuffer.put(input);
+            mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, 0,0);
+        }
+        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+        int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
+        Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
+        do
+        {
+            if (outputBufferIndex >= 0)
             {
-                if (outputBufferIndex >= 0)
+                ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
+                System.out.println("buffer info-->" + bufferInfo.offset + "--"
+                        + bufferInfo.size + "--" + bufferInfo.flags + "--"
+                        + bufferInfo.presentationTimeUs);
+                byte[] outData = new byte[bufferInfo.size];
+                outBuffer.get(outData);
+                try
                 {
-                    ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
-                    System.out.println("buffer info-->" + bufferInfo.offset + "--"
-                            + bufferInfo.size + "--" + bufferInfo.flags + "--"
-                            + bufferInfo.presentationTimeUs);
-                    byte[] outData = new byte[bufferInfo.size];
-                    outBuffer.get(outData);
-                    try
+                    if (bufferInfo.offset != 0)
                     {
-                        if (bufferInfo.offset != 0)
-                        {
-                            fos.write(outData, bufferInfo.offset, outData.length
-                                    - bufferInfo.offset);
-                        }
-                        else
-                        {
-                            fos.write(outData, 0, outData.length);
-                        }
-                        fos.flush();
-                        Log.i(TAG, "out data -- > " + outData.length);
-                        mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
-                        outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
-                                0);
+                        fos.write(outData, bufferInfo.offset, outData.length
+                                - bufferInfo.offset);
                     }
-                    catch (IOException e)
+                    else
                     {
-                        e.printStackTrace();
+                        fos.write(outData, 0, outData.length);
                     }
+                    fos.flush();
+                    Log.i(TAG, "out data -- > " + outData.length);
+                    mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
+                    outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
+                            0);
                 }
-                else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
+                catch (IOException e)
                 {
-                    outputBuffers = mediaCodec.getOutputBuffers();
+                    e.printStackTrace();
                 }
-                else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
-                {
-                    MediaFormat format = mediaCodec.getOutputFormat();
-                }
-            } while (outputBufferIndex >= 0);
-
-        }
+            }
+            else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
+            {
+                outputBuffers = mediaCodec.getOutputBuffers();
+            }
+            else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
+            {
+                MediaFormat format = mediaCodec.getOutputFormat();
+            }
+        } while (outputBufferIndex >= 0);
+    }
 
     private Camera getCameraInstanceRetry() {
         Camera c = null;
@@ -211,6 +227,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         Camera.Parameters camParams = camera.getParameters();
         int size = 320 * 240;
         camParams.setPreviewSize(320,240);
+        camParams.setPreviewFpsRange(5000, 5000);
         size  = size * ImageFormat.getBitsPerPixel(camParams.getPreviewFormat()) / 8;
         mBuffer = new byte[size]; // class variable
         camera.setParameters(camParams);
