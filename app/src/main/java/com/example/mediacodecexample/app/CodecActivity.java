@@ -2,10 +2,14 @@ package com.example.mediacodecexample.app;
 
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.media.AudioFormat;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 
+import android.media.MediaMuxer;
+import android.media.MediaRecorder;
+import android.os.Handler;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -25,10 +29,15 @@ import java.nio.ByteBuffer;
 public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Callback {
 
     private MediaCodec mediaCodec;
+    private MediaCodec audioCodec;
+    private MediaFormat mAudioFormat;
     private BufferedOutputStream outputStream;
     private Camera camera;
     private SurfaceView surfaceView;
     private FrameLayout frame;
+    private MediaFormat format;
+
+    private MediaMuxer mMuxer;
 
     private final static int maximumWaitTimeForCamera = 5000;
     private final static String TAG = "CodecActivity";
@@ -41,6 +50,20 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
 
     private byte[]  mBuffer;
     private int N =1;
+
+    public static final String MIME_TYPE_AUDIO = "audio/mp4a-latm";
+    public static final int SAMPLE_RATE = 44100;
+    public static final int CHANNEL_COUNT = 1;
+    public static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
+    public static final int BIT_RATE_AUDIO = 128000;
+    public static final int SAMPLES_PER_FRAME = 1024; // AAC
+    public static final int FRAMES_PER_BUFFER = 24;
+    public static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+    public static final int AUDIO_SOURCE = MediaRecorder.AudioSource.MIC;
+    private MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+    private int trackIndex;
+    private boolean isStarted = false;
+
 
 
 
@@ -66,12 +89,22 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         super.onDestroy();
     }
 
+    private  void muxFiles() {
+
+    }
+
     public void close() {
         try {
+            muxFiles();
             mediaCodec.stop();
             mediaCodec.release();
             fos.flush();
             fos.close();
+//            if (mMuxer != null) {
+//                mMuxer.stop();
+//                mMuxer.release();
+//                mMuxer = null;
+//            }
             camera.stopPreview();
             camera.release();
         } catch (Exception e){
@@ -79,7 +112,19 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         }
     }
 
+    public void prepareEncoder(){
+        // prepare audio format
+        mAudioFormat = MediaFormat.createAudioFormat(MIME_TYPE_AUDIO, SAMPLE_RATE, CHANNEL_COUNT);
+        mAudioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        mAudioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
+        mAudioFormat.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE_AUDIO);
 
+        audioCodec = MediaCodec.createEncoderByType(MIME_TYPE_AUDIO);
+        audioCodec.configure(mAudioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        audioCodec.start();
+
+        //new Thread(new AudioEncoderTask(), "AudioEncoderTask").start();
+    }
         public void setUp() {
             File f = new File("/sdcard/success");
             try {
@@ -104,6 +149,12 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             mediaCodec.start();
 
+            try {
+                mMuxer = new MediaMuxer("/sdcard/muxed.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+            } catch (IOException ioe) {
+                throw new RuntimeException("MediaMuxer creation failed", ioe);
+            }
+
         }
 
 
@@ -118,12 +169,12 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 Log.d("SIZE"," "+input.length);
                 inputBuffer.clear();
                 inputBuffer.put(input);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, 0,0);
+                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, System.nanoTime() / 1000 ,0);
                 N++;
             }
 
 
-            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+
             int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
             Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
             do
@@ -147,11 +198,19 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                         {
                             fos.write(outData, 0, outData.length);
                         }
+
+                        if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                            bufferInfo.size = 0;
+                        }
+                        if(bufferInfo.size != 0 && isStarted)
+                            mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
                         fos.flush();
                         Log.i(TAG, "out data -- > " + outData.length);
                         mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
                         outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
                                 0);
+
+
                     }
                     catch (IOException e)
                     {
@@ -164,7 +223,13 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 }
                 else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
                 {
-                    MediaFormat format = mediaCodec.getOutputFormat();
+                    format = mediaCodec.getOutputFormat();
+                    trackIndex = mMuxer.addTrack(format);
+                    isStarted = true;
+                    mMuxer.start();
+
+
+
                 }
             } while (outputBufferIndex >= 0);
 
@@ -217,7 +282,41 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             }
         });
 
+       // AudioRecordThread recorder = new AudioRecordThread(this,"dummy");
         camera.startPreview();
+
+        final Handler stop = new Handler();
+
+        stop.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                //camera.stopPreview();
+                //mediaCodec.signalEndOfInputStream();
+                isStarted = false;
+                mMuxer.stop();
+                mMuxer.release();
+                mMuxer = null;
+                try {
+                    mMuxer = new MediaMuxer("/sdcard/muxed2.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                } catch (IOException ioe) {
+                    throw new RuntimeException("MediaMuxer creation failed", ioe);
+                }
+                trackIndex = mMuxer.addTrack(format);
+                mMuxer.start();
+                isStarted = true;
+                stop.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        isStarted = false;
+                        mMuxer.stop();
+
+                    }
+                },5000);
+            }
+        }, 5000);
+        //recorder.start();
+
+
     }
 
     @Override
