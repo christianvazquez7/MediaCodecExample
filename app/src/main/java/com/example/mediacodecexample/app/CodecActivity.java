@@ -24,6 +24,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 
 public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Callback {
@@ -63,8 +64,10 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
     private int trackIndex;
     private boolean isStarted = false;
-
-
+    private ArrayList<byte[]> mBuffers = new ArrayList<byte[]>();
+    private int fromIndex = 0;
+    private int toIndex = -1;
+    private Runnable write;
 
 
     @Override
@@ -100,11 +103,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             mediaCodec.release();
             fos.flush();
             fos.close();
-//            if (mMuxer != null) {
-//                mMuxer.stop();
-//                mMuxer.release();
-//                mMuxer = null;
-//            }
             camera.stopPreview();
             camera.release();
         } catch (Exception e){
@@ -202,7 +200,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                         if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                             bufferInfo.size = 0;
                         }
-                        if(bufferInfo.size != 0 && isStarted)
+                        if(bufferInfo.size != 0)
                             mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
                         fos.flush();
                         Log.i(TAG, "out data -- > " + outData.length);
@@ -278,23 +276,27 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         camera.setPreviewCallback(new Camera.PreviewCallback() {
             @Override
             public void onPreviewFrame(byte[] bytes, Camera camera) {
-                offerEncoder(bytes);
+                mBuffers.add(bytes);
             }
         });
 
-       // AudioRecordThread recorder = new AudioRecordThread(this,"dummy");
         camera.startPreview();
 
         final Handler stop = new Handler();
 
-        stop.postDelayed(new Runnable() {
+
+            write = new Runnable() {
             @Override
             public void run() {
-                //camera.stopPreview();
-                //mediaCodec.signalEndOfInputStream();
-                isStarted = false;
+
+                toIndex = mBuffers.size();
+                for (int i = fromIndex ; i<toIndex ; i++){
+                    offerEncoder(mBuffers.get(i));
+                }
+                fromIndex = toIndex;
                 mMuxer.stop();
                 mMuxer.release();
+
                 mMuxer = null;
                 try {
                     mMuxer = new MediaMuxer("/sdcard/muxed2.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
@@ -303,18 +305,12 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 }
                 trackIndex = mMuxer.addTrack(format);
                 mMuxer.start();
-                isStarted = true;
-                stop.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        isStarted = false;
-                        mMuxer.stop();
+                stop.postDelayed(write,5000);
 
-                    }
-                },5000);
+
             }
-        }, 5000);
-        //recorder.start();
+        };
+        stop.postDelayed(write, 5000);
 
 
     }
