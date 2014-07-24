@@ -103,7 +103,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
         //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
 
@@ -166,7 +166,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
             format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+            format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
             //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
 
@@ -194,7 +194,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 Log.d("SIZE"," "+input.length);
                 inputBuffer.clear();
                 inputBuffer.put(input);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, System.nanoTime()/300 ,0);
+                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, i*1000*1000/FRAME_RATE,0);
                 N++;
             }
 
