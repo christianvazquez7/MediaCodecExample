@@ -185,6 +185,8 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
 
         public void offerEncoder(byte[] input, int i) {
 
+
+
             ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
             ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
 
@@ -198,12 +200,13 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 N++;
             }
 
-
+            Thread.yield();
 
             int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
             Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
             do
             {
+                Thread.yield();
                 if (outputBufferIndex >= 0)
                 {
                     ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
@@ -269,7 +272,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private void newOpenCamera() {
         if (mThread == null) {
             mThread = new CameraHandlerThread();
-            mThread.setPriority(Thread.MAX_PRIORITY );
+            //mThread.setPriority(Thread.MAX_PRIORITY );
         }
         synchronized (mThread) {
             mThread.openCamera();
