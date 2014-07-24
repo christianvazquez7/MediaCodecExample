@@ -87,6 +87,31 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         frame.addView(dummy);
     }
 
+    public void bootCodec() {
+        File f = new File("/sdcard/success");
+        try {
+            fos = new BufferedOutputStream(new FileOutputStream(f));
+            Log.i("AvcEncoder", "outputStream initialized");
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+
+        int encBitRate = 125000;
+
+        MediaFormat format = MediaFormat.createVideoFormat("video/avc", 320, 240);
+
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
+        //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
+
+        mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
+        mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        mediaCodec.start();
+    }
+
     @Override
     public void onDestroy() {
         if(mediaCodec != null)
@@ -317,7 +342,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             write = new Runnable() {
             @Override
             public void run() {
-                // Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+
                 toIndex = mBuffers.size();
                 for (int i = fromIndex ; i<toIndex ; i++){
                     Thread.yield();
@@ -326,6 +351,10 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 fromIndex = toIndex;
                 mMuxer.stop();
                 mMuxer.release();
+                mediaCodec.stop();
+                mediaCodec.release();
+                mediaCodec = null;
+                bootCodec();
 
                 mMuxer = null;
                 try {
@@ -333,14 +362,14 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 } catch (IOException ioe) {
                     throw new RuntimeException("MediaMuxer creation failed", ioe);
                 }
-                trackIndex = mMuxer.addTrack(format);
-                mMuxer.start();
+                //trackIndex = mMuxer.addTrack(format);
+                //mMuxer.start();
                 stop.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         toIndex = mBuffers.size();
                         Log.d("FROM",""+fromIndex);
-                        for (int i = 0 ; i<toIndex ; i++){
+                        for (int i = fromIndex; i<toIndex ; i++){
                             offerEncoder(mBuffers.get(i),i);
                         }
                         fromIndex = toIndex;
@@ -353,8 +382,8 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                         } catch (IOException ioe) {
                             throw new RuntimeException("MediaMuxer creation failed", ioe);
                         }
-                        trackIndex = mMuxer.addTrack(format);
-                        mMuxer.start();
+                        //trackIndex = mMuxer.addTrack(format);
+                        //mMuxer.start();
                     }
                 },5000);
 
