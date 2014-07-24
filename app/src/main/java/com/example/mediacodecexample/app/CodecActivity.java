@@ -10,6 +10,8 @@ import android.media.MediaFormat;
 import android.media.MediaMuxer;
 import android.media.MediaRecorder;
 import android.os.Handler;
+import android.os.HandlerThread;
+import android.renderscript.RenderScript;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -139,7 +141,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
             format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 15);
+            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
             //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
 
@@ -156,7 +158,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         }
 
 
-        public void offerEncoder(byte[] input) {
+        public void offerEncoder(byte[] input, int i) {
 
             ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
             ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
@@ -167,7 +169,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 Log.d("SIZE"," "+input.length);
                 inputBuffer.clear();
                 inputBuffer.put(input);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, System.nanoTime() / 1000 ,0);
+                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, System.nanoTime()/300 ,0);
                 N++;
             }
 
@@ -185,35 +187,18 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                             + bufferInfo.presentationTimeUs);
                     byte[] outData = new byte[bufferInfo.size];
                     outBuffer.get(outData);
-                    try
-                    {
-                        if (bufferInfo.offset != 0)
-                        {
-                            fos.write(outData, bufferInfo.offset, outData.length
-                                    - bufferInfo.offset);
-                        }
-                        else
-                        {
-                            fos.write(outData, 0, outData.length);
-                        }
+
 
                         if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                             bufferInfo.size = 0;
                         }
                         if(bufferInfo.size != 0)
                             mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
-                        fos.flush();
                         Log.i(TAG, "out data -- > " + outData.length);
                         mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
                         outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
                                 0);
 
-
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
                 }
                 else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
                 {
@@ -255,32 +240,76 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         return c;
     }
 
+
+    private void newOpenCamera() {
+        if (mThread == null) {
+            mThread = new CameraHandlerThread();
+            mThread.setPriority(Thread.MAX_PRIORITY );
+        }
+        synchronized (mThread) {
+            mThread.openCamera();
+        }
+    }
+    private CameraHandlerThread mThread = null;
+    private  class CameraHandlerThread extends HandlerThread {
+        Handler mHandler = null;
+        CameraHandlerThread() {
+            super("CameraHandlerThread");
+            start();
+            mHandler = new Handler(getLooper());
+        }
+
+        synchronized void notifyCameraOpened() {
+            notify();
+        }
+
+        void openCamera() {
+            mHandler.post(new Runnable() {
+                @Override
+                public void run()  {
+
+                    camera = CodecActivity.this.getCameraInstanceRetry();
+
+                    if (camera == null){
+                        camera = getCameraInstanceRetry();
+                    }
+                    try {
+                        camera.setPreviewDisplay(surfaceView.getHolder());
+                    } catch (IOException e){
+
+                    }
+
+                    Camera.Parameters camParams = camera.getParameters();
+                    int size = 320 * 240;
+                    camParams.setPreviewSize(320,240);
+                    size  = size * ImageFormat.getBitsPerPixel(camParams.getPreviewFormat()) / 8;
+                    mBuffer = new byte[size]; // class variable
+                    camera.setParameters(camParams);
+                    camera.addCallbackBuffer(mBuffer);
+                    camera.setPreviewCallback(new Camera.PreviewCallback() {
+                        @Override
+                        public void onPreviewFrame(byte[] bytes, Camera camera) {
+                            Log.d("CALL","!!!!!!*****!!!!!!******!!!!!");
+                            mBuffers.add(bytes);
+                        }
+                    });
+
+                    camera.startPreview();
+                    notifyCameraOpened();
+                }
+            });
+            try {
+                wait();
+            }
+            catch (InterruptedException e) {
+            }
+        }
+    }
+
+
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        if (camera == null){
-            camera = getCameraInstanceRetry();
-        }
-        try {
-            camera.setPreviewDisplay(holder);
-        } catch (IOException e){
-
-        }
-
-        Camera.Parameters camParams = camera.getParameters();
-        int size = 320 * 240;
-        camParams.setPreviewSize(320,240);
-        size  = size * ImageFormat.getBitsPerPixel(camParams.getPreviewFormat()) / 8;
-        mBuffer = new byte[size]; // class variable
-        camera.setParameters(camParams);
-        camera.addCallbackBuffer(mBuffer);
-        camera.setPreviewCallback(new Camera.PreviewCallback() {
-            @Override
-            public void onPreviewFrame(byte[] bytes, Camera camera) {
-                mBuffers.add(bytes);
-            }
-        });
-
-        camera.startPreview();
+        newOpenCamera();
 
         final Handler stop = new Handler();
 
@@ -288,10 +317,11 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             write = new Runnable() {
             @Override
             public void run() {
-
+                // Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
                 toIndex = mBuffers.size();
                 for (int i = fromIndex ; i<toIndex ; i++){
-                    offerEncoder(mBuffers.get(i));
+                    Thread.yield();
+                    offerEncoder(mBuffers.get(i), i);
                 }
                 fromIndex = toIndex;
                 mMuxer.stop();
@@ -305,7 +335,28 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 }
                 trackIndex = mMuxer.addTrack(format);
                 mMuxer.start();
-                stop.postDelayed(write,5000);
+                stop.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        toIndex = mBuffers.size();
+                        Log.d("FROM",""+fromIndex);
+                        for (int i = 0 ; i<toIndex ; i++){
+                            offerEncoder(mBuffers.get(i),i);
+                        }
+                        fromIndex = toIndex;
+                        mMuxer.stop();
+                        mMuxer.release();
+
+                        mMuxer = null;
+                        try {
+                            mMuxer = new MediaMuxer("/sdcard/muxed3.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                        } catch (IOException ioe) {
+                            throw new RuntimeException("MediaMuxer creation failed", ioe);
+                        }
+                        trackIndex = mMuxer.addTrack(format);
+                        mMuxer.start();
+                    }
+                },5000);
 
 
             }
