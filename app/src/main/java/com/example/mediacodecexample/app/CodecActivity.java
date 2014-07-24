@@ -31,6 +31,8 @@ import java.util.ArrayList;
 
 public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Callback {
 
+    public static final int WIDTH = 640;
+    public static final int HEIGHT = 480;
     private MediaCodec mediaCodec;
     private MediaCodec audioCodec;
     private MediaFormat mAudioFormat;
@@ -98,7 +100,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
 
         int encBitRate = 125000;
 
-        MediaFormat format = MediaFormat.createVideoFormat("video/avc", 320, 240);
+        MediaFormat format = MediaFormat.createVideoFormat("video/avc", WIDTH, HEIGHT);
 
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
@@ -161,7 +163,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
 
             int encBitRate = 125000;
 
-            MediaFormat format = MediaFormat.createVideoFormat("video/avc", 320, 240);
+            MediaFormat format = MediaFormat.createVideoFormat("video/avc", WIDTH, HEIGHT);
 
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
@@ -308,8 +310,8 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                     }
 
                     Camera.Parameters camParams = camera.getParameters();
-                    int size = 320 * 240;
-                    camParams.setPreviewSize(320,240);
+                    int size = WIDTH * HEIGHT;
+                    camParams.setPreviewSize(WIDTH, HEIGHT);
                     size  = size * ImageFormat.getBitsPerPixel(camParams.getPreviewFormat()) / 8;
                     mBuffer = new byte[size]; // class variable
                     camera.setParameters(camParams);
