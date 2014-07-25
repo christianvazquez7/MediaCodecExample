@@ -16,6 +16,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Muxdec {
     private static final String TAG = "Muxdec";
 
+    private boolean connected = true;
     private LinkedBlockingQueue<byte[]> rawBuffers;
     private MediaCodec mediaCodec;
     private MediaMuxer mMuxer;
@@ -44,8 +45,7 @@ public class Muxdec {
     private static final String MIME_TYPE = "video/avc";    // H.264 Advanced Video Coding
     private static final int FRAME_RATE = 30;               // 30fps
     private static final int IFRAME_INTERVAL = 5;           // 5 seconds between I-frames
-    public static final int WIDTH = 640;
-    public static final int HEIGHT = 480;
+
 
     public Muxdec(String fileName) {
         rawBuffers = new LinkedBlockingQueue<byte[]>();
@@ -58,11 +58,24 @@ public class Muxdec {
                 while (!Thread.currentThread().isInterrupted()) {
                     if (rawBuffers.size() > 0) {
                         offerEncoder(rawBuffers.remove());
+                    } else if (!connected) {
+                        break;
+                    } else {
+                        Thread.yield();
+                        try {
+                            Thread.sleep(50);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
                     Thread.yield();
                 }
             }
         });
+    }
+
+    public void add(byte[] input) {
+        rawBuffers.add(input);
     }
 
     public void prepareEncoder() {
@@ -79,9 +92,10 @@ public class Muxdec {
         //new Thread(new AudioEncoderTask(), "AudioEncoderTask").start();
     }
 
-    public void setUp(String path) {int encBitRate = 125000;
+    public void setUp(String path) {
+        int encBitRate = 125000;
 
-        MediaFormat format = MediaFormat.createVideoFormat("video/avc", WIDTH, HEIGHT);
+        MediaFormat format = MediaFormat.createVideoFormat("video/avc", CodecActivity.WIDTH, CodecActivity.HEIGHT);
 
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
@@ -99,7 +113,6 @@ public class Muxdec {
         } catch (IOException ioe) {
             throw new RuntimeException("MediaMuxer creation failed", ioe);
         }
-
     }
 
     public void offerEncoder(byte[] input) {
@@ -155,8 +168,9 @@ public class Muxdec {
                 mMuxer.start();
             }
         } while (outputBufferIndex >= 0);
-
     }
 
-
+    public void disconnect() {
+        connected = false;
+    }
 }

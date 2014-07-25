@@ -11,7 +11,6 @@ import android.media.MediaMuxer;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.renderscript.RenderScript;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -27,51 +26,31 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Callback {
 
-    public static final int WIDTH = 640;
-    public static final int HEIGHT = 480;
-    private MediaCodec mediaCodec;
-    private MediaCodec audioCodec;
-    private MediaFormat mAudioFormat;
+
+
     private BufferedOutputStream outputStream;
     private Camera camera;
     private SurfaceView surfaceView;
     private FrameLayout frame;
-    private MediaFormat format;
+
 
     private MediaMuxer mMuxer;
 
     private final static int maximumWaitTimeForCamera = 5000;
     private final static String TAG = "CodecActivity";
-    private static final String MIME_TYPE = "video/avc";    // H.264 Advanced Video Coding
-    private static final int FRAME_RATE = 30;               // 30fps
-    private static final int IFRAME_INTERVAL = 5;           // 5 seconds between I-frames
-    private static final long DURATION_SEC = 8;
 
-    private BufferedOutputStream fos;
+    public static final int WIDTH = 640;
+    public static final int HEIGHT = 480;
+
 
     private byte[]  mBuffer;
-    private int N =1;
-
-    public static final String MIME_TYPE_AUDIO = "audio/mp4a-latm";
-    public static final int SAMPLE_RATE = 44100;
-    public static final int CHANNEL_COUNT = 1;
-    public static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
-    public static final int BIT_RATE_AUDIO = 128000;
-    public static final int SAMPLES_PER_FRAME = 1024; // AAC
-    public static final int FRAMES_PER_BUFFER = 24;
-    public static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-    public static final int AUDIO_SOURCE = MediaRecorder.AudioSource.MIC;
-    private MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-    private int trackIndex;
-    private boolean isStarted = false;
-    private ArrayList<byte[]> mBuffers = new ArrayList<byte[]>();
-    private int fromIndex = 0;
-    private int toIndex = -1;
-    private Runnable write;
+    private LinkedBlockingQueue<byte[]> rawBuffers = new LinkedBlockingQueue<byte[]>();
+    Muxdec muxdec;
 
 
     @Override
@@ -81,7 +60,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         frame = (FrameLayout) this.findViewById(R.id.camera_preview);
 
-        setUp();
+        muxdec = new Muxdec("/sdcard/muxed.mp4");
         surfaceView = (SurfaceView) this.findViewById(R.id.camera_surface);
         surfaceView.getHolder().addCallback(this);
         SurfaceView dummy = new SurfaceView(this);
@@ -89,49 +68,19 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         frame.addView(dummy);
     }
 
-    public void bootCodec() {
-        File f = new File("/sdcard/success");
-        try {
-            fos = new BufferedOutputStream(new FileOutputStream(f));
-            Log.i("AvcEncoder", "outputStream initialized");
-        } catch (Exception e){
-            e.printStackTrace();
-        }
-
-        int encBitRate = 125000;
-
-        MediaFormat format = MediaFormat.createVideoFormat("video/avc", WIDTH, HEIGHT);
-
-        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
-        //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
-
-        mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
-        mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        mediaCodec.start();
-    }
-
     @Override
     public void onDestroy() {
-        if(mediaCodec != null)
-            close();
+        close();
         super.onDestroy();
     }
 
-    private  void muxFiles() {
-
-    }
-
     public void close() {
+        muxdec.disconnect();
         try {
-            muxFiles();
-            mediaCodec.stop();
+            /*mediaCodec.stop();
             mediaCodec.release();
             fos.flush();
-            fos.close();
+            fos.close();*/
             camera.stopPreview();
             camera.release();
         } catch (Exception e){
@@ -139,114 +88,9 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         }
     }
 
-    public void prepareEncoder(){
-        // prepare audio format
-        mAudioFormat = MediaFormat.createAudioFormat(MIME_TYPE_AUDIO, SAMPLE_RATE, CHANNEL_COUNT);
-        mAudioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        mAudioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
-        mAudioFormat.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE_AUDIO);
-
-        audioCodec = MediaCodec.createEncoderByType(MIME_TYPE_AUDIO);
-        audioCodec.configure(mAudioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        audioCodec.start();
-
-        //new Thread(new AudioEncoderTask(), "AudioEncoderTask").start();
-    }
-        public void setUp() {
-            File f = new File("/sdcard/success");
-            try {
-                fos = new BufferedOutputStream(new FileOutputStream(f));
-                Log.i("AvcEncoder", "outputStream initialized");
-            } catch (Exception e){
-                e.printStackTrace();
-            }
-
-            int encBitRate = 125000;
-
-            MediaFormat format = MediaFormat.createVideoFormat("video/avc", WIDTH, HEIGHT);
-
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-            format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
-            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
-            //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
-
-            mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
-            mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-            mediaCodec.start();
-
-            try {
-                mMuxer = new MediaMuxer("/sdcard/muxed.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-            } catch (IOException ioe) {
-                throw new RuntimeException("MediaMuxer creation failed", ioe);
-            }
-
-        }
-
-
-        public void offerEncoder(byte[] input, int i) {
 
 
 
-            ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
-            ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
-
-            int inputBufferIndex = mediaCodec.dequeueInputBuffer(-1);
-            if (inputBufferIndex >= 0) {
-                ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-                Log.d("SIZE"," "+input.length);
-                inputBuffer.clear();
-                inputBuffer.put(input);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, i*1000*1000/FRAME_RATE,0);
-                N++;
-            }
-
-            Thread.yield();
-
-            int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
-            Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
-            do
-            {
-                Thread.yield();
-                if (outputBufferIndex >= 0)
-                {
-                    ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
-                    System.out.println("buffer info-->" + bufferInfo.offset + "--"
-                            + bufferInfo.size + "--" + bufferInfo.flags + "--"
-                            + bufferInfo.presentationTimeUs);
-                    byte[] outData = new byte[bufferInfo.size];
-                    outBuffer.get(outData);
-
-
-                        if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                            bufferInfo.size = 0;
-                        }
-                        if(bufferInfo.size != 0)
-                            mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
-                        Log.i(TAG, "out data -- > " + outData.length);
-                        mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
-                        outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
-                                0);
-
-                }
-                else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
-                {
-                    outputBuffers = mediaCodec.getOutputBuffers();
-                }
-                else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
-                {
-                    format = mediaCodec.getOutputFormat();
-                    trackIndex = mMuxer.addTrack(format);
-                    isStarted = true;
-                    mMuxer.start();
-
-
-
-                }
-            } while (outputBufferIndex >= 0);
-
-        }
 
     private Camera getCameraInstanceRetry() {
         Camera c = null;
@@ -285,6 +129,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         Handler mHandler = null;
         CameraHandlerThread() {
             super("CameraHandlerThread");
+            Log.d(TAG, "starting CameraHandlerThread()");
             start();
             mHandler = new Handler(getLooper());
         }
@@ -320,7 +165,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                         @Override
                         public void onPreviewFrame(byte[] bytes, Camera camera) {
                             Log.d("CALL","!!!!!!*****!!!!!!******!!!!!");
-                            mBuffers.add(bytes);
+                            muxdec.add(bytes);
                         }
                     });
 
@@ -337,68 +182,28 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     }
 
 
+
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "in surfaceCreated()");
         newOpenCamera();
-
-        final Handler stop = new Handler();
-
-
-            write = new Runnable() {
-            @Override
-            public void run() {
-
-                toIndex = mBuffers.size();
-                for (int i = fromIndex ; i<toIndex ; i++){
-                    Thread.yield();
-                    offerEncoder(mBuffers.get(i), i);
-                }
-                fromIndex = toIndex;
-                mMuxer.stop();
-                mMuxer.release();
-                mediaCodec.stop();
-                mediaCodec.release();
-                mediaCodec = null;
-                bootCodec();
-
-                mMuxer = null;
-                try {
-                    mMuxer = new MediaMuxer("/sdcard/muxed2.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-                } catch (IOException ioe) {
-                    throw new RuntimeException("MediaMuxer creation failed", ioe);
-                }
-                //trackIndex = mMuxer.addTrack(format);
-                //mMuxer.start();
-                stop.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        toIndex = mBuffers.size();
-                        Log.d("FROM",""+fromIndex);
-                        for (int i = fromIndex; i<toIndex ; i++){
-                            offerEncoder(mBuffers.get(i),i);
-                        }
-                        fromIndex = toIndex;
-                        mMuxer.stop();
-                        mMuxer.release();
-
-                        mMuxer = null;
-                        try {
-                            mMuxer = new MediaMuxer("/sdcard/muxed3.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-                        } catch (IOException ioe) {
-                            throw new RuntimeException("MediaMuxer creation failed", ioe);
-                        }
-                        //trackIndex = mMuxer.addTrack(format);
-                        //mMuxer.start();
-                    }
-                },5000);
-
-
-            }
-        };
-        stop.postDelayed(write, 5000);
-
-
     }
+
+    /*private void restartMuxer() {
+        mMuxer.stop();
+        mMuxer.release();
+        mediaCodec.stop();
+        mediaCodec.release();
+        mediaCodec = null;
+        bootCodec();
+
+        mMuxer = null;
+        try {
+            mMuxer = new MediaMuxer("/sdcard/muxed2.mp4", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+        } catch (IOException ioe) {
+            throw new RuntimeException("MediaMuxer creation failed", ioe);
+        }
+    }*/
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
