@@ -51,27 +51,29 @@ public class Muxdec {
         rawBuffers = new LinkedBlockingQueue<byte[]>();
         setUp(fileName);
 
+        Log.d(TAG, "in Muxdec()");
         final Handler streamRawToCodec = new Handler();
-        streamRawToCodec.post(new Runnable() {
+        //streamRawToCodec.post(new Runnable() {
+        new Thread(new Runnable() {
             @Override
             public void run() {
                 while (!Thread.currentThread().isInterrupted()) {
+                    Log.d(TAG, "in streamRawToCodec while loop");
                     if (rawBuffers.size() > 0) {
                         offerEncoder(rawBuffers.remove());
                     } else if (!connected) {
                         break;
-                    } else {
-                        Thread.yield();
-                        try {
-                            Thread.sleep(50);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
                     }
                     Thread.yield();
+                    try {
+                        Thread.sleep(50);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             }
-        });
+        }).start();
+        Log.d(TAG, "posted runnable to streamRawToCodec");
     }
 
     public void add(byte[] input) {
@@ -171,6 +173,7 @@ public class Muxdec {
     }
 
     public void disconnect() {
+        Log.d(TAG, "disconnect()");
         connected = false;
     }
 }

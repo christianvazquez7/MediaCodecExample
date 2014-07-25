@@ -38,9 +38,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private SurfaceView surfaceView;
     private FrameLayout frame;
 
-
-    private MediaMuxer mMuxer;
-
     private final static int maximumWaitTimeForCamera = 5000;
     private final static String TAG = "CodecActivity";
 
@@ -49,7 +46,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
 
 
     private byte[]  mBuffer;
-    private LinkedBlockingQueue<byte[]> rawBuffers = new LinkedBlockingQueue<byte[]>();
     Muxdec muxdec;
 
 
@@ -66,6 +62,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         SurfaceView dummy = new SurfaceView(this);
         //frame.addView(surfaceView);
         frame.addView(dummy);
+        muxdec.disconnect();
     }
 
     @Override
