@@ -64,7 +64,8 @@ public class Muxdec {
                     Log.d(TAG, "rawBuffers.size(): " + rawBuffers.size());
                     //System.gc();
                 } else if (!connected) {
-                    //break;
+                    mediaCodec.signalEndOfInputStream();
+                    offerEncoder(null);
                 }
                 Thread.yield();
                 streamRawToCodec.postDelayed(r, 30);
@@ -148,7 +149,6 @@ public class Muxdec {
                 byte[] outData = new byte[bufferInfo.size];
                 outBuffer.get(outData);
 
-
                 if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     bufferInfo.size = 0;
                 }
@@ -170,6 +170,9 @@ public class Muxdec {
                 format = mediaCodec.getOutputFormat();
                 trackIndex = mMuxer.addTrack(format);
                 mMuxer.start();
+            }
+            else if (outputBufferIndex == MediaCodec.BUFFER_FLAG_END_OF_STREAM) {
+                mMuxer.stop();
             }
         } while (outputBufferIndex >= 0);
     }
