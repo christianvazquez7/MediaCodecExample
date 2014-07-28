@@ -46,6 +46,7 @@ public class Muxdec {
     private static final int FRAME_RATE = 30;               // 30fps
     private static final int IFRAME_INTERVAL = 5;           // 5 seconds between I-frames
 
+    private Runnable r;
 
     public Muxdec(String fileName) {
         rawBuffers = new LinkedBlockingQueue<byte[]>();
@@ -53,31 +54,31 @@ public class Muxdec {
 
         Log.d(TAG, "in Muxdec()");
         final Handler streamRawToCodec = new Handler();
-        //streamRawToCodec.post(new Runnable() {
-        new Thread(new Runnable() {
+        r = new Runnable() {
             @Override
             public void run() {
-                while (!Thread.currentThread().isInterrupted()) {
-                    Log.d(TAG, "in streamRawToCodec while loop");
-                    if (rawBuffers.size() > 0) {
-                        offerEncoder(rawBuffers.remove());
-                    } else if (!connected) {
-                        break;
-                    }
-                    Thread.yield();
-                    try {
-                        Thread.sleep(50);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                Log.d(TAG, "in streamRawToCodec while loop");
+                if (rawBuffers.size() > 0) {
+                    Log.d(TAG, "calling remove()");
+                    offerEncoder(rawBuffers.remove());
+                    Log.d(TAG, "rawBuffers.size(): " + rawBuffers.size());
+                    //System.gc();
+                } else if (!connected) {
+                    //break;
                 }
+                Thread.yield();
+                streamRawToCodec.postDelayed(r, 30);
             }
-        }).start();
+        };
+
+        streamRawToCodec.post(r);
         Log.d(TAG, "posted runnable to streamRawToCodec");
     }
 
     public void add(byte[] input) {
-        rawBuffers.add(input);
+        if (input != null) {
+            rawBuffers.add(input);
+        }
     }
 
     public void prepareEncoder() {
@@ -151,8 +152,9 @@ public class Muxdec {
                 if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     bufferInfo.size = 0;
                 }
-                if(bufferInfo.size != 0)
+                if(bufferInfo.size != 0) {
                     mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
+                }
                 Log.i(TAG, "out data -- > " + outData.length);
                 mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
                 outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,

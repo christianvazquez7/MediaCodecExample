@@ -2,31 +2,18 @@ package com.example.mediacodecexample.app;
 
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
-import android.media.AudioFormat;
-import android.media.MediaCodec;
-import android.media.MediaCodecInfo;
-import android.media.MediaFormat;
-
-import android.media.MediaMuxer;
-import android.media.MediaRecorder;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.v7.app.ActionBarActivity;
-import android.os.Bundle;
 import android.util.Log;
-
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Callback {
@@ -80,6 +67,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
             fos.close();*/
             camera.stopPreview();
             camera.release();
+            mThread.stop();
         } catch (Exception e){
             e.printStackTrace();
         }
@@ -211,9 +199,5 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     public void surfaceDestroyed(SurfaceHolder holder) {
         //Do nothing
     }
-
-
-
-
 
 }
