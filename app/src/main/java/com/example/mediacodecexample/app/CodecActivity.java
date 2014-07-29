@@ -49,8 +49,17 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
         customRecorder = new TakeTwoMediaRecorder(this,surfaceView);
         customRecorder.start();
 
-        
+        Runnable cut = new Runnable() {
+            @Override
+            public void run() {
+                customRecorder.cutTail();
+            }
+        };
 
+        handler.postDelayed(cut, 2000);
+        handler.postDelayed(cut, 4000);
+        handler.postDelayed(cut, 6000);
+        handler.postDelayed(cut, 8000);
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
