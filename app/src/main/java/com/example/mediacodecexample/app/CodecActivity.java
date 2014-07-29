@@ -36,7 +36,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private SurfaceView surfaceView;
     private FrameLayout frame;
     private MediaFormat format;
-    private int audioIndex;
+    private int audioIndex = -1;
     private  AudioRecordThread aRecorder;
     private MediaMuxer mMuxer;
     private final static int maximumWaitTimeForCamera = 5000;
@@ -57,8 +57,8 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
     private Runnable write;
     private static final String TEST_FILE = "/sdcard/muxi.mp4";
     private static final int FPS = 30;
-    private static final int VIDEO_WIDTH = 640;
-    private static final int VIDEO_HEIGHT = 480;
+    private static final int VIDEO_WIDTH = 320;
+    private static final int VIDEO_HEIGHT = 240;
     private static final int MAX_AUDIO_INPUT_SIZE =16384;
 
 
@@ -128,6 +128,8 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
         } catch (IOException ioe) {
             throw new RuntimeException("MediaMuxer creation failed", ioe);
         }
+
+
     }
     public void bootAudioCodec(){
         mAudioFormat = MediaFormat.createAudioFormat(MIME_TYPE_AUDIO, SAMPLE_RATE, CHANNEL_COUNT);
@@ -177,7 +179,7 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                     if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                         bufferInfo.size = 0;
                     }
-                    if(bufferInfo.size != 0) {
+                    if(bufferInfo.size != 0 && audioIndex != -1) {
                         mMuxer.writeSampleData(audioIndex, outBuffer, bufferInfo);
                     }
                     Log.i(TAG, "out data -- > " + outData.length);
@@ -213,8 +215,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                 mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.second.length, input.first ,0);
             }
 
-
-
             int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
             Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
             do
@@ -227,8 +227,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                             + bufferInfo.presentationTimeUs);
                     byte[] outData = new byte[bufferInfo.size];
                     outBuffer.get(outData);
-
-
                         if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                             bufferInfo.size = 0;
                         }
@@ -238,7 +236,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                         mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
                         outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
                                 0);
-
                 }
                 else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
                 {
@@ -250,8 +247,6 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                     trackIndex = mMuxer.addTrack(format);
                     audioIndex = mMuxer.addTrack(audioCodec.getOutputFormat());
                     mMuxer.start();
-
-
                 }
             } while (outputBufferIndex >= 0);
 
@@ -386,20 +381,14 @@ public class CodecActivity extends ActionBarActivity implements SurfaceHolder.Ca
                     if (i < soundData.size())
                         offerAudioEncoder(soundData.get(i), i);
                 }
-
-
                 mMuxer.stop();
                 mMuxer.release();
                 mediaCodec.stop();
                 mediaCodec.release();
                 mediaCodec = null;
-
-
             }
         };
         stop.postDelayed(write, 5000);
-
-
     }
 
     @Override
