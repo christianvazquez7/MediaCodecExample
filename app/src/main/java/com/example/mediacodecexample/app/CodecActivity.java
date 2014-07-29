@@ -1,11 +1,8 @@
 package com.example.mediacodecexample.app;
 
 import android.app.Activity;
-import android.graphics.ImageFormat;
-import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -51,6 +48,9 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
         Log.d(TAG, "in surfaceCreated()");
         customRecorder = new TakeTwoMediaRecorder(this,surfaceView);
         customRecorder.start();
+
+        
+
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {

@@ -9,7 +9,6 @@ import android.util.Pair;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.LinkedBlockingQueue;
 
 public class Muxdec {
     private static final String TAG = "Muxdec";

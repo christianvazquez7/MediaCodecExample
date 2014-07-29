@@ -2,7 +2,6 @@ package com.example.mediacodecexample.app;
 
 
 import android.content.Context;
-import android.hardware.Camera;
 import android.os.Handler;
 import android.util.Log;
 import android.util.Pair;
@@ -17,6 +16,7 @@ public class TakeTwoMediaRecorder {
     private Runnable poll;
     private Handler recordingHandler = new Handler();
     private  static final String DUMMY_FILE = "/sdcard/muxi.mp4";
+    private int fileNumber = 0;
 
     public TakeTwoMediaRecorder (Context activity, SurfaceView sv) {
 
@@ -85,7 +85,12 @@ public class TakeTwoMediaRecorder {
 
     }
     public String cutTail() {
-        return DUMMY_FILE;
+        ++fileNumber;
+        Muxdec oldMuxdec = muxdec;
+        String fileName = "/sdcard/muxi" + fileNumber + ".mp4";
+        muxdec = new Muxdec(fileName);
+        oldMuxdec.disconnect();
+        return fileName;
     }
     private String generateFileName() {
         return "/sdcard/muxi.mp4";
