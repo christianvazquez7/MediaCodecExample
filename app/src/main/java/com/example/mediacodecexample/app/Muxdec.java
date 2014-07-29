@@ -1,13 +1,11 @@
 package com.example.mediacodecexample.app;
 
-import android.media.AudioFormat;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
-import android.media.MediaRecorder;
-import android.os.Handler;
 import android.util.Log;
+import android.util.Pair;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -16,102 +14,59 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Muxdec {
     private static final String TAG = "Muxdec";
 
-    private boolean connected = true;
-    private LinkedBlockingQueue<byte[]> rawBuffers;
     private MediaCodec mediaCodec;
     private MediaMuxer mMuxer;
     private MediaCodec audioCodec;
     private MediaFormat mAudioFormat;
-
-    private int N = 1;
-
     private MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-    private int trackIndex;
+    private int trackIndex = -1;
+    private int audioIndex= -1;
 
     private MediaFormat format;
-
+    private boolean finish =false;
     // Audio Parameters
     public static final String MIME_TYPE_AUDIO = "audio/mp4a-latm";
     public static final int SAMPLE_RATE = 44100;
     public static final int CHANNEL_COUNT = 1;
-    public static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     public static final int BIT_RATE_AUDIO = 128000;
-    public static final int SAMPLES_PER_FRAME = 1024; // AAC
-    public static final int FRAMES_PER_BUFFER = 24;
-    public static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-    public static final int AUDIO_SOURCE = MediaRecorder.AudioSource.MIC;
+    private static final int ENCODING_BIT_RATE = 125000;
+    private static final int MAX_AUDIO_INPUT_SIZE =16384;
+    private static final int VIDEO_WIDTH = 320;
+    private static final int VIDEO_HEIGHT = 240;
 
     // Video Parameters
     private static final String MIME_TYPE = "video/avc";    // H.264 Advanced Video Coding
     private static final int FRAME_RATE = 30;               // 30fps
     private static final int IFRAME_INTERVAL = 5;           // 5 seconds between I-frames
 
-    private Runnable r;
 
     public Muxdec(String fileName) {
-        rawBuffers = new LinkedBlockingQueue<byte[]>();
         setUp(fileName);
-
-        Log.d(TAG, "in Muxdec()");
-        final Handler streamRawToCodec = new Handler();
-        r = new Runnable() {
-            @Override
-            public void run() {
-                Log.d(TAG, "in streamRawToCodec while loop");
-                if (rawBuffers.size() > 0) {
-                    Log.d(TAG, "calling remove()");
-                    offerEncoder(rawBuffers.remove());
-                    Log.d(TAG, "rawBuffers.size(): " + rawBuffers.size());
-                    //System.gc();
-                } else if (!connected) {
-                    mediaCodec.signalEndOfInputStream();
-                    offerEncoder(null);
-                }
-                Thread.yield();
-                streamRawToCodec.postDelayed(r, 30);
-            }
-        };
-
-        streamRawToCodec.post(r);
-        Log.d(TAG, "posted runnable to streamRawToCodec");
     }
 
-    public void add(byte[] input) {
-        if (input != null) {
-            rawBuffers.add(input);
-        }
-    }
-
-    public void prepareEncoder() {
-        // prepare audio format
+    public void bootAudioCodec() {
         mAudioFormat = MediaFormat.createAudioFormat(MIME_TYPE_AUDIO, SAMPLE_RATE, CHANNEL_COUNT);
         mAudioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        mAudioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
+        mAudioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, MAX_AUDIO_INPUT_SIZE);
         mAudioFormat.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE_AUDIO);
-
         audioCodec = MediaCodec.createEncoderByType(MIME_TYPE_AUDIO);
         audioCodec.configure(mAudioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         audioCodec.start();
-
-        //new Thread(new AudioEncoderTask(), "AudioEncoderTask").start();
     }
 
-    public void setUp(String path) {
-        int encBitRate = 125000;
-
-        MediaFormat format = MediaFormat.createVideoFormat("video/avc", CodecActivity.WIDTH, CodecActivity.HEIGHT);
-
+    public void bootVideoCodec() {
+        MediaFormat format = MediaFormat.createVideoFormat("video/avc", VIDEO_WIDTH, VIDEO_HEIGHT);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, encBitRate);
+                MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar);
+        format.setInteger(MediaFormat.KEY_BIT_RATE, ENCODING_BIT_RATE);
         format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFRAME_INTERVAL);
-        //format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 320 * 240);
-
         mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
         mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         mediaCodec.start();
+    }
 
+    public void bootMuxer(String path) {
         try {
             mMuxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         } catch (IOException ioe) {
@@ -119,18 +74,83 @@ public class Muxdec {
         }
     }
 
-    public void offerEncoder(byte[] input) {
+
+    public void setUp(String path) {
+        bootAudioCodec();
+        bootVideoCodec();
+        bootMuxer(path);
+    }
+
+    public void offerAudioEncoder(Pair<Long,byte []> input) {
+        ByteBuffer[] inputBuffers = audioCodec.getInputBuffers();// here changes
+        ByteBuffer[] outputBuffers = audioCodec.getOutputBuffers();
+
+        int inputBufferIndex = audioCodec.dequeueInputBuffer(-1);
+        if (inputBufferIndex >= 0) {
+            ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
+            inputBuffer.clear();
+            inputBuffer.put(input.second);
+            audioCodec.queueInputBuffer(inputBufferIndex, 0, input.second.length, input.first,0);
+        }
+
+
+        int outputBufferIndex = audioCodec.dequeueOutputBuffer(bufferInfo, 0);
+        Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
+        do
+        {
+            if (outputBufferIndex >= 0)
+            {
+                ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
+
+
+                System.out.println("buffer info-->" + bufferInfo.offset + "--"
+                        + bufferInfo.size + "--" + bufferInfo.flags + "--"
+                        + bufferInfo.presentationTimeUs);
+                byte[] outData = new byte[bufferInfo.size];
+                outBuffer.get(outData);
+
+
+                if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                    bufferInfo.size = 0;
+                }
+                if(bufferInfo.size != 0 && audioIndex != -1 && !finish) {
+                    Log.d("HAHA","~~~~~~~~~~~~~~~~~~~~~~~~");
+                    mMuxer.writeSampleData(audioIndex, outBuffer, bufferInfo);
+                }
+                Log.i(TAG, "out data -- > " + outData.length);
+                audioCodec.releaseOutputBuffer(outputBufferIndex, false);
+                outputBufferIndex = audioCodec.dequeueOutputBuffer(bufferInfo,
+                        0);
+
+            }
+            else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
+            {
+                outputBuffers = audioCodec.getOutputBuffers();
+            }
+            else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
+            {
+//                Log.d("HAHA","!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+//
+//                MediaFormat audioFormat = audioCodec.getOutputFormat();
+//                //Log.d("AUDIO","here");
+//                audioIndex = mMuxer.addTrack(audioFormat);
+//                mMuxer.start();
+            }
+        } while (outputBufferIndex >= 0);
+    }
+
+    public void offerEncoder(Pair<Long,byte[]> input) {
+
+        byte[] toEncode = NV21toNV12(input.second,VIDEO_WIDTH,VIDEO_HEIGHT);
         ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();// here changes
         ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
 
         int inputBufferIndex = mediaCodec.dequeueInputBuffer(-1);
         if (inputBufferIndex >= 0) {
             ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
-            Log.d("SIZE", " " + input.length);
             inputBuffer.clear();
-            inputBuffer.put(input);
-            mediaCodec.queueInputBuffer(inputBufferIndex, 0, input.length, N*1000*1000/FRAME_RATE,0);
-            N++;
+            inputBuffer.put(toEncode);
+            mediaCodec.queueInputBuffer(inputBufferIndex, 0, toEncode.length,input.first,0);
         }
 
         Thread.yield();
@@ -152,7 +172,7 @@ public class Muxdec {
                 if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     bufferInfo.size = 0;
                 }
-                if(bufferInfo.size != 0) {
+                if(bufferInfo.size != 0 && !finish && trackIndex != -1) {
                     mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
                 }
                 Log.i(TAG, "out data -- > " + outData.length);
@@ -169,16 +189,30 @@ public class Muxdec {
             {
                 format = mediaCodec.getOutputFormat();
                 trackIndex = mMuxer.addTrack(format);
+                audioIndex = mMuxer.addTrack(audioCodec.getOutputFormat());
                 mMuxer.start();
             }
-            else if (outputBufferIndex == MediaCodec.BUFFER_FLAG_END_OF_STREAM) {
-                mMuxer.stop();
-            }
+
         } while (outputBufferIndex >= 0);
     }
 
     public void disconnect() {
         Log.d(TAG, "disconnect()");
-        connected = false;
+        finish = true;
+        mediaCodec.stop();
+        audioCodec.stop();
+        mMuxer.stop();
+    }
+
+    public byte[] NV21toNV12(byte[] input, int width, int height) {
+        int frameSize = width * height;
+        byte[] result = new byte[input.length];
+        int limit = frameSize/4;
+        System.arraycopy(input, 0, result, 0, frameSize);
+        for (int i =0; i<limit ; i++) {
+            result[frameSize + i*2] = input[frameSize + i*2+1];
+            result [frameSize + i*2 +1] = input[frameSize + i*2];
+        }
+        return result;
     }
 }
