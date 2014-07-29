@@ -113,7 +113,7 @@ public class Muxdec {
                 if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     bufferInfo.size = 0;
                 }
-                if(bufferInfo.size != 0 && audioIndex != -1 && !finish) {
+                if(bufferInfo.size != 0 && audioIndex != -1 ) {
                     Log.d("HAHA","~~~~~~~~~~~~~~~~~~~~~~~~");
                     mMuxer.writeSampleData(audioIndex, outBuffer, bufferInfo);
                 }
@@ -172,7 +172,7 @@ public class Muxdec {
                 if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                     bufferInfo.size = 0;
                 }
-                if(bufferInfo.size != 0 && !finish && trackIndex != -1) {
+                if(bufferInfo.size != 0  && trackIndex != -1) {
                     mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
                 }
                 Log.i(TAG, "out data -- > " + outData.length);
@@ -198,7 +198,6 @@ public class Muxdec {
 
     public void disconnect() {
         Log.d(TAG, "disconnect()");
-        finish = true;
         mediaCodec.stop();
         audioCodec.stop();
         mMuxer.stop();

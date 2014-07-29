@@ -56,7 +56,7 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
             public void run() {
                 customRecorder.stop();
             }
-        },6000);
+        },10000);
 
     }
 
