@@ -56,16 +56,15 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
             }
         };
 
-        handler.postDelayed(cut, 2000);
-        handler.postDelayed(cut, 4000);
-        handler.postDelayed(cut, 6000);
-        handler.postDelayed(cut, 8000);
+        handler.postDelayed(cut, 5000);
+        handler.postDelayed(cut, 10000);
+        handler.postDelayed(cut, 15000);
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 customRecorder.stop();
             }
-        },10000);
+        }, 20000);
 
     }
 
