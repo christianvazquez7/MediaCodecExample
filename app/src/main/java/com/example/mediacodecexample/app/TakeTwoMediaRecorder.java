@@ -19,11 +19,14 @@ public class TakeTwoMediaRecorder {
     private int fileNumber = 0;
 
     public TakeTwoMediaRecorder (Context activity, SurfaceView sv) {
+        Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
 
         muxdec = new Muxdec(this.generateFileName());
         cameraThread = new CameraHandlerThread(sv);
+        //cameraThread.setPriority(Thread.MAX_PRIORITY);
         cameraThread.openCamera();
         aRecorder = new AudioRecordThread(activity,"/sdcard/dummy");
+        aRecorder.setPriority(Thread.MAX_PRIORITY);
 
         poll = new Runnable() {
             @Override
@@ -36,6 +39,7 @@ public class TakeTwoMediaRecorder {
                 if (videoBuffer != null) {
                     muxdec.offerEncoder(videoBuffer);
                 }
+                Thread.yield();
                 if (audioBuffer != null) {
                     muxdec.offerAudioEncoder(audioBuffer);
                 }
@@ -57,41 +61,41 @@ public class TakeTwoMediaRecorder {
     }
 
 
-    public void stop() {
-
+    public void stop(boolean continueRecording) {
         recordingHandler.removeCallbacks(poll);
-        cameraThread.stopPreview();
-        aRecorder.stopRecording();
 
-
-        int size = Math.max(aRecorder.size(),cameraThread.size());
-        Log.d(TAG,"max: "+size);
         int vSize = cameraThread.size();
         int aSize = aRecorder.size();
+        int size = Math.max(aSize, vSize);
+        Log.d(TAG,"max: "+size);
 
+        if (!continueRecording) {
+            cameraThread.stopPreview();
+            aRecorder.stopRecording();
+        }
 
         for (int i = 0 ; i <size; i++) {
-            if (i < vSize)
+            if (i < vSize) {
                 muxdec.offerEncoder(cameraThread.getFrame());
-            if (i < aSize)
+                Thread.yield();
+            }
+            if (i < aSize) {
                 muxdec.offerAudioEncoder(aRecorder.getFrame());
+                Thread.yield();
+            }
         }
 
         Log.d("HAHA",""+cameraThread.size());
         Log.d("HAHA",""+aRecorder.size());
 
-
         muxdec.disconnect();
+        if (continueRecording) {
+            String fileName = "/sdcard/muxi" + fileNumber + ".mp4";
+            muxdec = new Muxdec(fileName);
+            recordingHandler.post(poll);
+        }
+    }
 
-    }
-    public String cutTail() {
-        ++fileNumber;
-        Muxdec oldMuxdec = muxdec;
-        String fileName = "/sdcard/muxi" + fileNumber + ".mp4";
-        muxdec = new Muxdec(fileName);
-        oldMuxdec.disconnect();
-        return fileName;
-    }
     private String generateFileName() {
         return "/sdcard/muxi.mp4";
     }

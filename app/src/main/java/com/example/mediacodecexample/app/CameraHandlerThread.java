@@ -1,6 +1,5 @@
 package com.example.mediacodecexample.app;
 
-import android.content.Context;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.os.Handler;
@@ -51,6 +50,8 @@ public class CameraHandlerThread extends HandlerThread {
                 } catch (IOException e){
 
                 }
+
+                Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 
                 Camera.Parameters camParams = camera.getParameters();
                 int size = VIDEO_WIDTH * VIDEO_HEIGHT;

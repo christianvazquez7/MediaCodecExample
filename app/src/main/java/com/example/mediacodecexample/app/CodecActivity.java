@@ -37,7 +37,7 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
     }
 
     public void close() {
-        customRecorder.stop();
+        customRecorder.stop(false);
     }
 
 
@@ -50,7 +50,7 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
         Runnable cut = new Runnable() {
             @Override
             public void run() {
-                customRecorder.cutTail();
+                customRecorder.stop(true);
             }
         };
 
@@ -60,7 +60,7 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                customRecorder.stop();
+                customRecorder.stop(false);
             }
         }, 20000);
 

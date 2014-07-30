@@ -82,10 +82,9 @@ public class Muxdec {
 
     public void offerAudioEncoder(Pair<Long,byte []> input) {
         ByteBuffer[] inputBuffers = audioCodec.getInputBuffers();// here changes
-        Thread.yield();
         ByteBuffer[] outputBuffers = audioCodec.getOutputBuffers();
-        Thread.yield();
 
+        Thread.yield();
         int inputBufferIndex = audioCodec.dequeueInputBuffer(-1);
         Thread.yield();
         if (inputBufferIndex >= 0) {
