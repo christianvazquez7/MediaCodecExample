@@ -10,8 +10,6 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 
-
-
 public class CodecActivity extends Activity implements SurfaceHolder.Callback {
 
     private SurfaceView surfaceView;
@@ -56,9 +54,9 @@ public class CodecActivity extends Activity implements SurfaceHolder.Callback {
             }
         };
 
-        handler.postDelayed(cut, 5000);
+        //handler.postDelayed(cut, 5000);
         handler.postDelayed(cut, 10000);
-        handler.postDelayed(cut, 15000);
+        //handler.postDelayed(cut, 15000);
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {

@@ -82,19 +82,27 @@ public class Muxdec {
 
     public void offerAudioEncoder(Pair<Long,byte []> input) {
         ByteBuffer[] inputBuffers = audioCodec.getInputBuffers();// here changes
+        Thread.yield();
         ByteBuffer[] outputBuffers = audioCodec.getOutputBuffers();
+        Thread.yield();
 
         int inputBufferIndex = audioCodec.dequeueInputBuffer(-1);
+        Thread.yield();
         if (inputBufferIndex >= 0) {
             ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
+            Thread.yield();
             inputBuffer.clear();
+            Thread.yield();
             inputBuffer.put(input.second);
+            Thread.yield();
             audioCodec.queueInputBuffer(inputBufferIndex, 0, input.second.length, input.first,0);
+            Thread.yield();
         }
 
 
         int outputBufferIndex = audioCodec.dequeueOutputBuffer(bufferInfo, 0);
-        Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
+        Thread.yield();
+        //Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
         do
         {
             if (outputBufferIndex >= 0)
@@ -102,9 +110,9 @@ public class Muxdec {
                 ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
 
 
-                System.out.println("buffer info-->" + bufferInfo.offset + "--"
+                /*System.out.println("buffer info-->" + bufferInfo.offset + "--"
                         + bufferInfo.size + "--" + bufferInfo.flags + "--"
-                        + bufferInfo.presentationTimeUs);
+                        + bufferInfo.presentationTimeUs);*/
                 byte[] outData = new byte[bufferInfo.size];
                 outBuffer.get(outData);
 
@@ -113,7 +121,7 @@ public class Muxdec {
                     bufferInfo.size = 0;
                 }
                 if(bufferInfo.size != 0 && audioIndex != -1 ) {
-                    Log.d("HAHA","~~~~~~~~~~~~~~~~~~~~~~~~");
+                    //Log.d("HAHA","~~~~~~~~~~~~~~~~~~~~~~~~");
                     mMuxer.writeSampleData(audioIndex, outBuffer, bufferInfo);
                 }
                 Log.i(TAG, "out data -- > " + outData.length);
@@ -135,6 +143,7 @@ public class Muxdec {
 //                audioIndex = mMuxer.addTrack(audioFormat);
 //                mMuxer.start();
             }
+            Thread.yield();
         } while (outputBufferIndex >= 0);
     }
 
@@ -155,16 +164,16 @@ public class Muxdec {
         Thread.yield();
 
         int outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 0);
-        Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
+        //Log.i(TAG, "outputBufferIndex-->" + outputBufferIndex);
         do
         {
             Thread.yield();
             if (outputBufferIndex >= 0)
             {
                 ByteBuffer outBuffer = outputBuffers[outputBufferIndex];
-                System.out.println("buffer info-->" + bufferInfo.offset + "--"
+                /*System.out.println("buffer info-->" + bufferInfo.offset + "--"
                         + bufferInfo.size + "--" + bufferInfo.flags + "--"
-                        + bufferInfo.presentationTimeUs);
+                        + bufferInfo.presentationTimeUs);*/
                 byte[] outData = new byte[bufferInfo.size];
                 outBuffer.get(outData);
 
@@ -174,7 +183,7 @@ public class Muxdec {
                 if(bufferInfo.size != 0  && trackIndex != -1) {
                     mMuxer.writeSampleData(trackIndex, outBuffer, bufferInfo);
                 }
-                Log.i(TAG, "out data -- > " + outData.length);
+                //Log.i(TAG, "out data -- > " + outData.length);
                 mediaCodec.releaseOutputBuffer(outputBufferIndex, false);
                 outputBufferIndex = mediaCodec.dequeueOutputBuffer(bufferInfo,
                         0);
