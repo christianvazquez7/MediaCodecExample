@@ -6,6 +6,10 @@
     tools:ignore="MergeRootFrame"
     >
     <SurfaceView
+        android:id="@+id/video_surface"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent" />
+    <SurfaceView
         android:id="@+id/camera_surface"
         android:layout_width="1dp"
         android:layout_height="1dp" />
